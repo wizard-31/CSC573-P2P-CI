@@ -9,6 +9,7 @@ import re
 import sys
 import random
 import threading
+from _thread import *
 import signal
 import fnmatch
 import platform
@@ -22,23 +23,23 @@ p2pversion = "P2P-CI/1.0"
 
 #Client Setup
 serverListeningPort = 7734
-clientAddress = socket.gethostbyname(socket.gethostname())
-clientName = socket.gethostname()
+clientAddress = gethostbyname(gethostname())
+clientName = "client1.ncsu.edu"
 serverName = "DESKTOP-IP1CNJD"
-serverAddress = socket.gethostbyname(serverName)
+serverAddress = gethostbyname(serverName)
 PEER_PORT = 33001 #Hardcoded for now
 P2S_SOCKET = 0
-BUFFER_SIZE = 2048
 
-RFCs_Held = [
-	{'RFCNumber': 791, 'Title': 'Internet Protocol'},
-	{'RFCNumber': 793, 'Title': 'Transmission Control Protocol'},
-	{'RFCNumber': 1058, 'Title': 'Routing Information Protocol'},
-	{'RFCNumber': 2328, 'Title': 'OSPF Version 2'}
-]
+#Format {RFCNumber: Title}
+RFCs_Held = {
+	791: "Internet Protocol",
+	793: "Transmission Control Protocol",
+	1058: "Routing Information Protocol",
+	2328: "OSPF Version 2"
+}
 
 # PEER_RFC_LIST = {"RFC Number": [], "RFC Title": [], "Peer Name": [], "Peer Port": []}
-PEER_RFC_LIST = defaultdict(list) #Format: {RFCNumber: [Peer_HostName--PeerPort--RFC Title]}
+PEER_RFC_LIST = defaultdict(tuple) #Format: {(RFCNumber, RFC Title):(Peer_HostName, PeerPort)}
 RFC_PATH = "client_A/"
 
 def formatDetail(itemA,itemB,itemC):
@@ -56,29 +57,31 @@ def ErrorFromServer(serverReply):
         print("\n Cannot handle this Server Error" )
 
 def startUploadServer():
-	P2P_SOCKET = socket(AF_INET, SOCK_STREAM)
-    try:
-        P2P_SOCKET.bind((clientName, PEER_PORT))
-        P2P_SOCKET.listen()
-        print("\nPeer is ready......")
+    P2P_SOCKET = socket(AF_INET, SOCK_STREAM)
+    P2P_SOCKET.bind((serverName, PEER_PORT))
+    P2P_SOCKET.listen()        
+    # try:
+    #     P2P_SOCKET.bind((clientName, PEER_PORT))
+    #     P2P_SOCKET.listen(10)
+    #     print("\nPeer is ready......")
 
-        while True:
-            peersocket, peeraddr = P2P_SOCKET.accept()
-            threading.Thread(target = peerTransfer, args = (peersocket, peeraddr)).start()
-    
-    except error, (value, message):
-        print("\nException: while binding the peer...")
-        print("\nPeer Upload Stopped. Please try again...")
-        P2P_SOCKET.close()
-        del P2P_SOCKET
-        exit(message)
+    while True:
+        peersocket, peeraddr = P2P_SOCKET.accept()
+        start_new_thread(peerTransfer, (peersocket, peeraddr))
+
+    # except error as message:
+    #     print("\nException: while binding the peer...")
+    #     print("\nPeer Upload Stopped. Please try again...")
+    #     P2P_SOCKET.close()
+    #     del P2P_SOCKET
+    #     exit(message)
 
 def peerTransfer(peersocket, peeraddr):
-    print("\n\n Connected to Peer {}".format(peeraddr))
+    print("\n\nConnected to Peer {}".format(peeraddr))
     flag = 0
     incoming_data = []
     while True:
-        fragment = peersocket.recv(2048)
+        fragment = peersocket.recv(1024)
         incoming_data.append(fragment.decode('utf-8'))
         if '\r\n\r\n' in fragment.decode('utf-8'):
             break
@@ -87,14 +90,14 @@ def peerTransfer(peersocket, peeraddr):
 
     if 'GET' not in incoming_request:
         clientMessage = respMessages[400] + 'Closing Connection. \r\n\r\n'
-        print("\n{}\n".format(clientMessage))
+        print("\nClientMessage: \n{} \n".format(clientMessage))
         peersocket.sendall(clientMessage.encode('utf-8'))
         peersocket.close()
         return 0
 
-    p2pver = 'P2P-CI/' + re.search('P2P-CI/(.*)\r\n', incoming_request).group(1)
-    rfcDetail = re.search('RFC (.*) P2P', incoming_request).group(1)
-    sendFile = RFC_PATH + 'rfc' + rfcDetail + ".txt"
+    p2pver = "P2P-CI/" + re.search("P2P-CI/(.*)\r\n", incoming_request).group(1)
+    rfcDetail = re.search("RFC (.*) P2P", incoming_request).group(1)
+    sendFile = RFC_PATH + "rfc" + rfcDetail + ".txt"
     date = time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.gmtime())
 
     if p2pver != p2pversion:
@@ -109,16 +112,17 @@ def peerTransfer(peersocket, peeraddr):
     
     else:
         flag = 1
-        print("\n Peer is requesting RFC {}".format(rfcDetail))
+        print("\nPeer is requesting RFC {}".format(rfcDetail))
         clientMessage = "{} {}\r\nDate:{}\r\nOS: {}\r\nLast-Modified: {}\r\nContent-Length: {}\r\nContent-Type: text/text\r\nData:". \
                         format(p2pver, respMessages[200], date, platform.platform(), os.path.getmtime(sendFile), os.path.getsize(sendFile))
+        print("\nClientMessage: \n{} \n".format(clientMessage))
         peersocket.sendall(clientMessage.encode('utf-8'))
 
         with open(sendFile, 'rb') as f:
             content = f.read(8192)
             while content:
                 print("\nSending file content...")
-                peersocket.sendall(data)
+                peersocket.sendall(content)
                 content = f.read(8192)
             print("\n File Transfer Completed")
             peersocket.sendall("\r\n\r\n".encode('utf-8'))
@@ -148,26 +152,26 @@ def sayHelloToServer():
     return 0
 
 def revealYourself():
+    # global RFCs_Held
     errorFlag = 0
-    for rfc in RFCs_Held:
-        clientMessage = "ADD RFC {} P2P-CI/1.0\r\nHost:{}\r\nPort:{}\r\nTitle:{}\r\n\r\n".format(rfc['RFCNumber'], clientName, PEER_PORT, rfc['Title'])
-        print("\nPublishing RFC {}".format(rfc['RFCNumber']))
+    for k,v in RFCs_Held.items():
+        clientMessage = "ADD RFC {} P2P-CI/1.0\r\nHost:{}\r\nPort:{}\r\nTitle:{}\r\n\r\n".format(k, clientName, PEER_PORT, v)
+        print("\nClientMessage: \n{} \n".format(clientMessage))
+        print("\nPublishing RFC {}".format(k))
             
         #Send all the RFCs in your system
         incoming_data = []
         try:
             P2S_SOCKET.sendall(clientMessage.encode('utf-8'))
             while True:
-                fragment = P2S_SOCKET.recv(2048)
+                fragment = P2S_SOCKET.recv(1024)
                 incoming_data.append(fragment.decode('utf-8'))
                 if "\r\n\r\n" in fragment.decode('utf-8'):
                     break
-        
         except error as err:
             errorFlag = 1
             print("Socket Error {} at Line: {}".format(err, sys.exc_info()[-1].tb_lineno))
             continue #Other files waiting
-        
         except Exception as e:
             errorFlag = 1
             print("Socket Exception {} at Line: {}".format(e, sys.exc_info()[-1].tb_lineno))
@@ -192,7 +196,7 @@ def NowYouSeeMeToo():
     try:
         P2S_SOCKET.sendall(clientMessage.encode('utf-8'))
         while True:
-            fragment = P2S_SOCKET.recv(2048)
+            fragment = P2S_SOCKET.recv(1024)
             replyData.append(fragment.decode('utf-8'))
             if "\r\n\r\n" in fragment.decode('utf-8'):
                 break
@@ -214,8 +218,8 @@ def NowYouSeeMeToo():
         global PEER_RFC_LIST
         for rfc in rfcList:
             rfc = rfc.split()
-            PEER_RFC_LIST[rfc[0]].append(formatDetail(rfc[2], rfc[3], rfc[1]))
-        return 1        
+            PEER_RFC_LIST[(rfc[0], rfc[3:len(rfc)-3])] = (rfc[1], rfc[2])
+        return 1    
     else:
         ErrorFromServer(replyDataStr)
         return 0
@@ -226,11 +230,9 @@ def sayonara():
         P2S_SOCKET.sendall(clientMessage.encode('utf-8'))
         P2S_SOCKET.close()
         return 1
-    
     except error as err:
         print("\n Socket Error {}".format(err))
         return 0
-
     except Exception as e:
         print("\n Socket Exception {}".format(e))
         return 0
@@ -244,7 +246,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, PoofProgram)
     good_old_menu_options = {
         1:"Register (say hello to server)",
-        2:"PUBLISH RFCs (ADD)",
+        2:"PUBLISH existing RFCs (ADD)",
         3:"LIST all RFCs at Server's CI",
         4:"LOOKUP RFCs",
         5:"Download RFC from a Peer",
@@ -258,47 +260,47 @@ if __name__ == "__main__":
         for num, option in good_old_menu_options.items():
             print("\n{}.\t {}".format(num, option))
 
-        choice = int(input("What's on your mind today?:"))
+        choice = int(input("\n\nWhat's on your mind today?:\n>"))
 
         if choice == 1:
-            if sayHelloToServer(): #Once registered to server, waiting for other Peers to cconact
-                threading.Thread(target = startUploadServer, args = ()).start()
+            if sayHelloToServer(): #Once registered to server, waiting for other Peers to connect
+                start_new_thread(startUploadServer, ())
                 if not revealYourself():
-                    print("\n Unable to ADD all RFCs on the server. Try again later.")
+                    print("\nUnable to ADD all RFCs on the server. Try again later.")
             else:
-                print("\n Server seems to be busy. Try again")
+                print("\nServer seems to be busy. Try again")
         
         elif choice == 2:
             if not revealYourself():
-                print("\n Unable to ADD all RFCs on the server. Try again later.")
+                print("\nUnable to ADD all RFCs on the server. Try again later.")
         
         elif choice == 3:
             if not NowYouSeeMeToo():
-                print("\n Unable to LIST all RFCs on the server. Try again later.")
+                print("\nUnable to LIST all RFCs on the server. Try again later.")
         
         elif choice == 4:
             rfcToLookup = int(input("Enter RFC Number you need to check: "))
             if not KnockKnock(rfcToLookup):
-                print("\n Unable to LOOKUP requested RFC on the server. Looks like no Peer has that yet. Try again later.")
+                print("\nUnable to LOOKUP requested RFC on the server. Looks like no Peer has that yet. Try again later.")
         
         elif choice == 5:
             rfcToDownload = int(input("Enter RFC Number you need to download: "))
             if not downloadRFC(rfcToDownload):
-                print("\n Unable to DOWNLOAD requested RFC from peer. Try again later or with a different peer.")
+                print("\nUnable to DOWNLOAD requested RFC from peer. Try again later or with a different peer.")
         
         elif choice == 6:
             rfcToPublish = int(input("Enter RFC Number you need to publish: "))
             if not publishNewRFC(rfcToPublish):
-                print("\n Unable to UPDATE requested RFC to server. Try again later.")
+                print("\nUnable to UPDATE requested RFC to server. Try again later.")
         
         elif choice == 7:
             if not sayonara():
-                print("\n Unable to get off of Server yet. Try again later.")
+                print("\nUnable to get off of Server yet. Try again later.")
             else:
                 break
 
         else:
-            print("\n Did you check the options correctly? You shouldn't be here.")
+            print("\nDid you check the options correctly? You shouldn't be here.")
 
-    print("\n Toodaloo")
+    print("\nToodaloo")
 
