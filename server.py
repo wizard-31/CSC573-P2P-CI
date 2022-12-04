@@ -18,8 +18,8 @@ p2pversion = "P2P-CI/1.0"
 
 #Server Setup
 serverListeningPort = 7734
-serverAddress = socket.gethostbyname(socket.gethostname())
-serverName = socket.gethostname()
+serverAddress = gethostbyname(gethostname())
+serverName = gethostname()
 serverSocket = socket(AF_INET,SOCK_STREAM)
 BUFFER_SIZE = 2048
 
@@ -27,7 +27,7 @@ try:
     serverSocket.bind((serverAddress, serverListeningPort))
     serverSocket.listen(10)
     print("\nServer is ready......")
-except error, (value, message):
+except error as message:
     print("\nException: while binding the server...")
     print("\nRegistration Stopped. Please try again...")
     serverSocket.close()
@@ -62,7 +62,7 @@ def LetTheConnectionsBegin(clientconnSocket, clientAddr):
             rfcTitle = clientData[3].split(":")[1].strip()
             try:
                 assert p2pver == p2pversion, respMessages[505]
-            except AssertionError, e:
+            except AssertionError as e:
                 print("\n{}".format(e))
                 print("\n Client using unsupported P2P version. Connection closing")
                 clientconnSocket.close()
@@ -71,7 +71,7 @@ def LetTheConnectionsBegin(clientconnSocket, clientAddr):
             if rfcDetail in RFCtoClientMap.keys():
                 matching = fnmatch.filter(RFCtoClientMap[rfcDetail], pattern)
                 if len(matching) > 0:
-                    replyMessage = "{} {}".format(p2pversion respMessages[200]) + "\r\n\r\n"
+                    replyMessage = "{} {}".format(p2pversion, respMessages[200]) + "\r\n\r\n"
                     print("{} \n".format(replyMessage))
                     clientconnSocket.sendall(replyMessage.encode('utf-8'))
                     continue
@@ -125,7 +125,7 @@ def LetTheConnectionsBegin(clientconnSocket, clientAddr):
             p2pver = clientHeader.split()[3]
             try:
                 assert p2pver == p2pversion, respMessages[505]
-            except AssertionError, e:
+            except AssertionError as e:
                 print("\n{}".format(e))
                 print("\n Client using unsupported P2P version. Connection closing")
                 clientconnSocket.close()
@@ -156,7 +156,7 @@ def NowYouSeeMe():
     print("\n\n Active Connection List:")
     for i in range(len(ActiveConnList)):
         peer, port = i.split("-")[0], i.split("-")[1]
-        print("\nPeerName:{} \t --- \t RFC Port Number:{}".format(peer, port)
+        print("\nPeerName:{} \t --- \t RFC Port Number:{}".format(peer, port))
     print("\n")
 
     print("\n\n Who has what you wonder?. Here you go")
@@ -164,13 +164,13 @@ def NowYouSeeMe():
         print("\n RFC Number: {} \t --- \t Clients {}".format(key, value))
     print("\n")
 
-def PoofProgram(recv_signal, frame):
-    print("\n\n Toodaloo...")
-    exit()
+# def PoofProgram(recv_signal, frame):
+#     print("\n\n Toodaloo...")
+#     exit()
 
 #This is where Server keeps accepting Connections from Peers
-signal.signal(signal.SIGINT, PoofProgram)
 while True:
+    # signal.signal(signal.SIGINT, PoofProgram)
     clientconnSocket, clientAddr = serverSocket.accept()
     print("\n Connected to client {} with port # {}".format(clientAddr, clientconnSocket))
     threading.Thread(target = LetTheConnectionsBegin, args = (clientconnSocket, clientAddr)).start()
