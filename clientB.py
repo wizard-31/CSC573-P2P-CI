@@ -20,20 +20,18 @@ import random
 respMessages = {200:"200 OK", 400:"400 Bad Request", 404:"404 Not Found", 505:"505 P2P-CI Version Not Supported"}
 p2pversion = "P2P-CI/1.0"
 
-HOSTNAME = "client1.csc.ncsu.edu"
+HOSTNAME = "client2.csc.ncsu.edu"
 SERVER_IP = 'localhost'
 SERVER_PORT = 7734
-PEER_PORT = 33001
+PEER_PORT = 33002
 P2S_SOCKET = 0
 
 RFCs = [
-	{'rfc_no': 791, 'title': 'Internet Protocol'},
 	{'rfc_no': 793, 'title': 'Transmission Control Protocol'},
-	{'rfc_no': 1058, 'title': 'Routing Information Protocol'},
-	{'rfc_no': 2328, 'title': 'OSPF Version 2'}
+	{'rfc_no': 4271, 'title': 'A Border Gateway Protocol 4'}
 ]
 PEER_RFCs = {"RFC Number": [], "RFC Title": [], "Peer Name": [], "Peer Port": []}
-RFC_PATH = 'client_A/'
+RFC_PATH = 'client_B/'
 
 def startFileUpload():
 	P2P_SOCKET = socket(AF_INET, SOCK_STREAM)
@@ -116,8 +114,8 @@ def publish_all():
 	for rfc in RFCs:
 		peerMessage = "ADD RFC {} P2P-CI/1.0\r\nHost:{}\r\nPort:{}\r\nTitle:{}\r\n\r\n".format(rfc['rfc_no'], HOSTNAME, PEER_PORT, rfc['title'])
 		print("Publishing RFC: ", rfc['rfc_no'])
-
 		# print("Debugging ADD --- \n", peerMessage)
+
 		outgoingData = []
 		try:
 			P2S_SOCKET.sendall(peerMessage.encode())
